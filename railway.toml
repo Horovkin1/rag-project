@@ -5,4 +5,4 @@ builder = "dockerfile"
 startCommand = "python src/server.py"
 healthcheckPath = "/health"
 healthcheckTimeout = 300
-restartPolicyType = "on-failure"
+restartPolicyType = "ON_FAILURE"
