@@ -604,7 +604,8 @@
 
 <script>
 // ── Config ────────────────────────────────────────────────────────────────────
-let SERVER_URL = localStorage.getItem('serverUrl') || 'http://localhost:8000';
+const _defaultUrl = (window.location.protocol === 'file:' || !window.location.host) ? 'http://localhost:8000' : window.location.origin;
+let SERVER_URL = localStorage.getItem('serverUrl') || _defaultUrl;
 document.getElementById('serverUrl').value = SERVER_URL;
 
 function saveSettings() {
