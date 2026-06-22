@@ -1,0 +1,11 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.idea/
+diplom_work/
+unpacked/
+diplom_check.pdf
+.claude/
+data/

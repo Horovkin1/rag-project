@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RAG Knowledge Base</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  :root {
+    --bg:        #0f1117;
+    --surface:   #181c27;
+    --surface2:  #1f2435;
+    --border:    #2a3044;
+    --accent:    #5b7fff;
+    --accent2:   #3ef0b0;
+    --text:      #e8eaf0;
+    --muted:     #6b7799;
+    --danger:    #ff5f6d;
+    --radius:    12px;
+    --font:      'Inter', sans-serif;
+    --mono:      'JetBrains Mono', monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    height: 100vh;
+    display: flex;
+    overflow: hidden;
+  }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    width: 260px;
+    min-width: 260px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    padding: 20px 0;
+  }
+
+  .logo {
+    padding: 0 20px 20px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 16px;
+  }
+  .logo h1 {
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: .02em;
+    color: var(--text);
+  }
+  .logo span {
+    font-size: 11px;
+    color: var(--muted);
+    font-family: var(--mono);
+  }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 20px;
+    cursor: pointer;
+    border-radius: 0;
+    font-size: 13.5px;
+    color: var(--muted);
+    transition: all .15s;
+    border-left: 2px solid transparent;
+  }
+  .nav-item:hover { color: var(--text); background: var(--surface2); }
+  .nav-item.active { color: var(--accent); border-left-color: var(--accent); background: rgba(91,127,255,.08); }
+  .nav-item svg { width: 16px; height: 16px; opacity: .8; }
+
+  .sidebar-footer {
+    margin-top: auto;
+    padding: 16px 20px;
+    border-top: 1px solid var(--border);
+  }
+
+  .status-dot {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--danger);
+    transition: background .3s;
+  }
+  .dot.online { background: var(--accent2); box-shadow: 0 0 6px var(--accent2); }
+
+  /* ── Main ── */
+  .main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── Topbar ── */
+  .topbar {
+    padding: 14px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--surface);
+  }
+  .topbar h2 { font-size: 14px; font-weight: 500; color: var(--text); }
+  .topbar .actions { display: flex; gap: 8px; }
+
+  .btn {
+    padding: 7px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text);
+    font-size: 12.5px;
+    font-family: var(--font);
+    cursor: pointer;
+    transition: all .15s;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.primary:hover { background: #4a6ee0; }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+
+  /* ── Panels ── */
+  .panel { display: none; flex: 1; flex-direction: column; overflow: hidden; }
+  .panel.active { display: flex; }
+
+  /* ── Chat panel ── */
+  .messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    scroll-behavior: smooth;
+  }
+  .messages::-webkit-scrollbar { width: 4px; }
+  .messages::-webkit-scrollbar-track { background: transparent; }
+  .messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .msg {
+    display: flex;
+    flex-direction: column;
+    max-width: 720px;
+    animation: fadeUp .2s ease;
+  }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .msg.user { align-self: flex-end; align-items: flex-end; }
+  .msg.assistant { align-self: flex-start; align-items: flex-start; }
+
+  .msg-label {
+    font-size: 10.5px;
+    font-family: var(--mono);
+    color: var(--muted);
+    margin-bottom: 5px;
+    letter-spacing: .04em;
+  }
+
+  .msg-body {
+    padding: 12px 16px;
+    border-radius: var(--radius);
+    font-size: 13.5px;
+    line-height: 1.65;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .msg.user .msg-body {
+    background: var(--accent);
+    color: #fff;
+    border-bottom-right-radius: 4px;
+  }
+  .msg.assistant .msg-body {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-bottom-left-radius: 4px;
+    color: var(--text);
+  }
+  .msg.assistant .msg-body.thinking {
+    color: var(--muted);
+    font-style: italic;
+  }
+
+  .msg-sources {
+    margin-top: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+  .source-tag {
+    padding: 3px 8px;
+    background: rgba(62,240,176,.08);
+    border: 1px solid rgba(62,240,176,.2);
+    border-radius: 20px;
+    font-size: 11px;
+    color: var(--accent2);
+    font-family: var(--mono);
+  }
+
+  /* ── Chat input ── */
+  .chat-input-wrap {
+    padding: 16px 24px;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .chat-input-row {
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 14px;
+    transition: border-color .15s;
+  }
+  .chat-input-row:focus-within { border-color: var(--accent); }
+
+  #chatInput {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 13.5px;
+    resize: none;
+    max-height: 120px;
+    line-height: 1.5;
+  }
+  #chatInput::placeholder { color: var(--muted); }
+
+  .send-btn {
+    width: 34px; height: 34px;
+    border-radius: 8px;
+    border: none;
+    background: var(--accent);
+    color: #fff;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    transition: background .15s, transform .1s;
+  }
+  .send-btn:hover { background: #4a6ee0; }
+  .send-btn:active { transform: scale(.95); }
+  .send-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+  /* ── Ingest panel ── */
+  .ingest-wrap {
+    flex: 1;
+    overflow-y: auto;
+    padding: 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    max-width: 760px;
+  }
+
+  .card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+  }
+  .card h3 {
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 14px;
+    color: var(--text);
+    letter-spacing: .03em;
+    text-transform: uppercase;
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+  .field label { font-size: 12px; color: var(--muted); }
+  .field input, .field textarea, .field select {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 9px 12px;
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 13px;
+    outline: none;
+    transition: border-color .15s;
+  }
+  .field input:focus, .field textarea:focus { border-color: var(--accent); }
+  .field textarea { resize: vertical; min-height: 120px; line-height: 1.6; }
+
+  .drop-zone {
+    border: 1.5px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 32px;
+    text-align: center;
+    cursor: pointer;
+    transition: all .2s;
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .drop-zone:hover, .drop-zone.drag-over {
+    border-color: var(--accent);
+    background: rgba(91,127,255,.05);
+    color: var(--accent);
+  }
+  .drop-zone svg { margin-bottom: 10px; opacity: .5; }
+
+  .result-box {
+    padding: 12px 14px;
+    border-radius: 8px;
+    font-size: 12.5px;
+    font-family: var(--mono);
+    display: none;
+  }
+  .result-box.success { background: rgba(62,240,176,.08); border: 1px solid rgba(62,240,176,.2); color: var(--accent2); }
+  .result-box.error   { background: rgba(255,95,109,.08); border: 1px solid rgba(255,95,109,.2); color: var(--danger); }
+
+  /* ── Stats panel ── */
+  .stats-wrap {
+    flex: 1;
+    overflow-y: auto;
+    padding: 28px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 16px;
+    align-content: start;
+  }
+
+  .stat-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+  }
+  .stat-card .stat-label {
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    margin-bottom: 10px;
+  }
+  .stat-card .stat-value {
+    font-size: 28px;
+    font-weight: 600;
+    font-family: var(--mono);
+    color: var(--accent);
+  }
+  .stat-card .stat-sub {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+
+  /* ── Settings panel ── */
+  .settings-wrap {
+    flex: 1;
+    overflow-y: auto;
+    padding: 28px;
+    max-width: 560px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .settings-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 13px;
+  }
+  .settings-row .key { color: var(--muted); font-family: var(--mono); font-size: 12px; }
+  .settings-row .val { color: var(--accent2); font-family: var(--mono); font-size: 12px; }
+
+  /* ── Empty state ── */
+  .empty {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    color: var(--muted);
+    pointer-events: none;
+  }
+  .empty svg { opacity: .2; }
+  .empty p { font-size: 13px; }
+
+  /* ── Doc list item ── */
+  .doc-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 12.5px;
+  }
+  .doc-item .doc-info { flex: 1; min-width: 0; }
+  .doc-item .doc-title { color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .doc-item .doc-meta  { color: var(--muted); font-size: 11px; margin-top: 2px; font-family: var(--mono); }
+  .doc-item .del-btn {
+    flex-shrink: 0;
+    background: none; border: none; cursor: pointer;
+    color: var(--muted); padding: 4px; border-radius: 4px;
+    transition: color .15s;
+  }
+  .doc-item .del-btn:hover { color: var(--danger); }
+
+  /* ── Toast ── */
+  #toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    padding: 11px 18px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    font-size: 13px;
+    color: var(--text);
+    opacity: 0;
+    transform: translateY(10px);
+    transition: all .25s;
+    pointer-events: none;
+    z-index: 100;
+  }
+  #toast.show { opacity: 1; transform: translateY(0); }
+
+  /* ── Scrollbar ── */
+  * { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+</style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+  <div class="logo">
+    <h1>RAG Assistant</h1>
+    <span>MCP · Qdrant · local embeddings</span>
+  </div>
+
+  <nav>
+    <div class="nav-item active" data-panel="chat" onclick="switchPanel('chat', this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      Чат
+    </div>
+    <div class="nav-item" data-panel="ingest" onclick="switchPanel('ingest', this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+      Документы
+    </div>
+    <div class="nav-item" data-panel="stats" onclick="switchPanel('stats', this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+      Статистика
+    </div>
+    <div class="nav-item" data-panel="settings" onclick="switchPanel('settings', this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93A10 10 0 0 0 4.93 19.07M19.07 4.93A10 10 0 0 1 4.93 19.07"/></svg>
+      Настройки
+    </div>
+  </nav>
+
+  <div class="sidebar-footer">
+    <div class="status-dot">
+      <span class="dot" id="statusDot"></span>
+      <span id="statusText">Подключение...</span>
+    </div>
+  </div>
+</aside>
+
+<!-- Main -->
+<main class="main">
+
+  <!-- Chat panel -->
+  <div class="panel active" id="panel-chat">
+    <div class="topbar">
+      <h2>Чат с базой знаний</h2>
+      <div class="actions">
+        <button class="btn" onclick="clearChat()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg>
+          Очистить
+        </button>
+      </div>
+    </div>
+
+    <div class="messages" id="messages">
+      <div class="empty" id="emptyChat">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        <p>Задайте вопрос — поиск пройдёт по всей базе знаний</p>
+      </div>
+    </div>
+
+    <div class="chat-input-wrap">
+      <div class="chat-input-row">
+        <textarea id="chatInput" rows="1" placeholder="Спросите что-нибудь..." onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+        <button class="send-btn" id="sendBtn" onclick="sendMessage()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Ingest panel -->
+  <div class="panel" id="panel-ingest">
+    <div class="topbar">
+      <h2>Загрузка документов</h2>
+    </div>
+    <div class="ingest-wrap">
+
+      <!-- File drop -->
+      <div class="card">
+        <h3>Загрузить файл</h3>
+        <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()"
+             ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="dropFile(event)">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="display:block;margin:0 auto 8px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          Перетащите файл сюда или нажмите для выбора<br>
+          <span style="font-size:11px;opacity:.6;margin-top:6px;display:block">PDF · DOCX · XLSX · CSV · TXT · MD</span>
+        </div>
+        <div class="result-box" id="uploadResult" style="margin-top:12px"></div>
+        <input type="file" id="fileInput" style="display:none" accept=".pdf,.docx,.doc,.xlsx,.xls,.csv,.txt,.md,.json" onchange="uploadFile(event)">
+      </div>
+
+      <!-- Document list -->
+      <div class="card" id="docListCard">
+        <h3>База знаний <span id="docCount" style="color:var(--accent);font-size:12px;margin-left:6px"></span></h3>
+        <div id="docList" style="display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto"></div>
+      </div>
+
+      <!-- Text input -->
+      <div class="card">
+        <h3>Вставить текст</h3>
+        <div class="field">
+          <label>Заголовок документа</label>
+          <input type="text" id="docTitle" placeholder="Например: Инструкция по установке">
+        </div>
+        <div class="field">
+          <label>Источник</label>
+          <input type="text" id="docSource" placeholder="Например: docs.myapp.com">
+        </div>
+        <div class="field">
+          <label>Содержимое</label>
+          <textarea id="docContent" placeholder="Вставьте текст документа..."></textarea>
+        </div>
+        <div class="result-box" id="ingestResult"></div>
+        <button class="btn primary" onclick="ingestText()" style="margin-top:4px">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          Индексировать
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Stats panel -->
+  <div class="panel" id="panel-stats">
+    <div class="topbar">
+      <h2>Статистика базы знаний</h2>
+      <button class="btn" onclick="loadStats()">Обновить</button>
+    </div>
+    <div class="stats-wrap" id="statsWrap">
+      <div style="grid-column:1/-1;color:var(--muted);font-size:13px;padding:20px 0">Загрузка...</div>
+    </div>
+  </div>
+
+  <!-- Settings panel -->
+  <div class="panel" id="panel-settings">
+    <div class="topbar"><h2>Настройки</h2></div>
+    <div class="settings-wrap">
+      <div class="card">
+        <h3>Подключение</h3>
+        <div class="field">
+          <label>URL MCP-сервера</label>
+          <input type="text" id="serverUrl" placeholder="http://localhost:8000" onchange="saveSettings()">
+        </div>
+        <button class="btn primary" onclick="testConnection()">Проверить соединение</button>
+      </div>
+      <div id="configCards"></div>
+    </div>
+  </div>
+
+</main>
+
+<div id="toast"></div>
+
+<script>
+// ── Config ────────────────────────────────────────────────────────────────────
+let SERVER_URL = localStorage.getItem('serverUrl') || 'http://localhost:8000';
+document.getElementById('serverUrl').value = SERVER_URL;
+
+function saveSettings() {
+  SERVER_URL = document.getElementById('serverUrl').value.replace(/\/$/, '');
+  localStorage.setItem('serverUrl', SERVER_URL);
+  checkStatus();
+}
+
+// ── Panel switching ────────────────────────────────────────────────────────────
+function switchPanel(name, el) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('panel-' + name).classList.add('active');
+  el.classList.add('active');
+  if (name === 'stats') loadStats();
+  if (name === 'settings') loadConfig();
+  if (name === 'ingest') loadDocuments();
+}
+
+// ── Status check ──────────────────────────────────────────────────────────────
+async function checkStatus() {
+  const dot = document.getElementById('statusDot');
+  const txt = document.getElementById('statusText');
+  try {
+    const r = await fetch(SERVER_URL + '/health', { signal: AbortSignal.timeout(3000) });
+    if (r.ok) {
+      dot.classList.add('online');
+      txt.textContent = 'Сервер онлайн';
+      return true;
+    }
+  } catch {}
+  dot.classList.remove('online');
+  txt.textContent = 'Нет соединения';
+  return false;
+}
+
+async function testConnection() {
+  const ok = await checkStatus();
+  toast(ok ? '✅ Сервер доступен' : '❌ Нет соединения — проверьте URL и запустите сервер');
+}
+
+checkStatus().then(() => loadDocuments());
+setInterval(checkStatus, 10000);
+
+// ── MCP Tool call via REST ─────────────────────────────────────────────────────
+async function callTool(name, args) {
+  // Напрямую обращаемся к нашему FastAPI-серверу
+  const r = await fetch(SERVER_URL + '/tool/' + name, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(args),
+  });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return await r.json();
+}
+
+// ── Chat ──────────────────────────────────────────────────────────────────────
+const messages = [];
+
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+}
+
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+
+async function sendMessage() {
+  const input = document.getElementById('chatInput');
+  const text = input.value.trim();
+  if (!text) return;
+
+  input.value = '';
+  input.style.height = 'auto';
+  document.getElementById('sendBtn').disabled = true;
+  document.getElementById('emptyChat')?.remove();
+
+  addMsg('user', text);
+  messages.push({ role: 'user', content: text });
+
+  const thinkId = addMsg('assistant', 'Ищу в базе знаний...', true);
+
+  try {
+    // 1. Поиск в RAG
+    const results = await callTool('search_knowledge_base', { query: text, top_k: 4 });
+
+    // 2. Формируем контекст
+    const context = results.map((r, i) =>
+      `[${i+1}] (score: ${r.score})\n${r.content}`
+    ).join('\n\n---\n\n');
+
+    // 3. Запрос к Claude API через наш сервер
+    const answerRes = await fetch(SERVER_URL + '/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages: messages.slice(-6),
+        context,
+        query: text,
+      }),
+    });
+
+    let answer;
+    if (answerRes.ok) {
+      const data = await answerRes.json();
+      answer = data.answer;
+    } else {
+      // Fallback — показываем результаты поиска напрямую
+      if (results.length === 0) {
+        answer = 'В базе знаний ничего не найдено по вашему запросу. Попробуйте сначала загрузить документы во вкладке «Документы».';
+      } else {
+        answer = `Нашёл ${results.length} фрагментов:\n\n` +
+          results.map((r, i) => `${i+1}. ${r.content.slice(0, 200)}...`).join('\n\n');
+      }
+    }
+
+    updateMsg(thinkId, answer);
+    messages.push({ role: 'assistant', content: answer });
+
+    // Показываем источники
+    if (results.length > 0) {
+      showSources(thinkId, results);
+    }
+  } catch (e) {
+    updateMsg(thinkId, `Ошибка: ${e.message}\n\nПроверьте, запущен ли сервер на ${SERVER_URL}`);
+  }
+
+  document.getElementById('sendBtn').disabled = false;
+  scrollDown();
+}
+
+let _msgSeq = 0;
+function addMsg(role, text, thinking = false) {
+  const id = 'msg-' + (++_msgSeq);
+  const wrap = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.className = 'msg ' + role;
+  div.id = id;
+  div.innerHTML = `
+    <div class="msg-label">${role === 'user' ? 'Вы' : 'RAG Assistant'}</div>
+    <div class="msg-body ${thinking ? 'thinking' : ''}">${escHtml(text)}</div>
+  `;
+  wrap.appendChild(div);
+  scrollDown();
+  return id;
+}
+
+function updateMsg(id, text) {
+  const el = document.querySelector('#' + id + ' .msg-body');
+  if (el) { el.textContent = text; el.classList.remove('thinking'); }
+}
+
+function showSources(id, results) {
+  const el = document.getElementById(id);
+  const sources = [...new Set(results.map(r => r.metadata?.title || r.metadata?.source || 'документ'))];
+  const div = document.createElement('div');
+  div.className = 'msg-sources';
+  div.innerHTML = sources.map(s => `<span class="source-tag">${escHtml(s)}</span>`).join('');
+  el.appendChild(div);
+}
+
+function clearChat() {
+  messages.length = 0;
+  const wrap = document.getElementById('messages');
+  wrap.innerHTML = `<div class="empty" id="emptyChat">
+    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+    <p>Задайте вопрос — поиск пройдёт по всей базе знаний</p>
+  </div>`;
+}
+
+function scrollDown() {
+  const w = document.getElementById('messages');
+  w.scrollTop = w.scrollHeight;
+}
+
+// ── Ingest ────────────────────────────────────────────────────────────────────
+async function ingestText() {
+  const content = document.getElementById('docContent').value.trim();
+  const title   = document.getElementById('docTitle').value.trim();
+  const source  = document.getElementById('docSource').value.trim();
+  const box     = document.getElementById('ingestResult');
+
+  if (!content) { toast('Вставьте текст документа'); return; }
+
+  box.style.display = 'block';
+  box.className = 'result-box';
+  box.textContent = 'Индексируется...';
+
+  try {
+    const result = await callTool('ingest_document', {
+      content,
+      metadata: { title: title || 'Без названия', source: source || 'manual' },
+    });
+    box.className = 'result-box success';
+    box.textContent = `✓ Готово: doc_id=${result.doc_id}, чанков=${result.chunks}`;
+    document.getElementById('docContent').value = '';
+    document.getElementById('docTitle').value = '';
+    toast('Документ добавлен в базу знаний');
+    loadDocuments();
+  } catch (e) {
+    box.className = 'result-box error';
+    box.textContent = '✗ Ошибка: ' + e.message;
+  }
+}
+
+function dragOver(e)  { e.preventDefault(); e.currentTarget.classList.add('drag-over'); }
+function dragLeave(e) { e.currentTarget.classList.remove('drag-over'); }
+function dropFile(e)  {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) sendFileToServer(file);
+}
+function uploadFile(e) { if (e.target.files[0]) sendFileToServer(e.target.files[0]); }
+
+async function sendFileToServer(file) {
+  const box = document.getElementById('uploadResult');
+  const zone = document.getElementById('dropZone');
+  const ext = file.name.split('.').pop().toLowerCase();
+  const textExts = ['txt', 'md', 'json', 'py', 'js', 'ts', 'html', 'css'];
+
+  box.style.display = 'block';
+  box.className = 'result-box';
+  box.textContent = `⏳ Обрабатываю «${file.name}»...`;
+  zone.style.opacity = '0.5';
+  zone.style.pointerEvents = 'none';
+
+  try {
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('title', file.name.replace(/\.[^.]+$/, ''));
+    fd.append('source', 'upload');
+
+    const r = await fetch(SERVER_URL + '/upload', { method: 'POST', body: fd });
+    const data = await r.json();
+
+    if (!r.ok || data.error) {
+      box.className = 'result-box error';
+      box.textContent = '✗ ' + (data.error || 'Ошибка загрузки');
+      toast('Ошибка: ' + (data.error || 'неизвестная'));
+    } else {
+      box.className = 'result-box success';
+      box.textContent = `✓ «${file.name}» — doc_id=${data.doc_id}, чанков=${data.chunks}, символов≈${data.chars?.toLocaleString() ?? '?'}`;
+      toast(`Файл «${file.name}» добавлен в базу знаний`);
+      document.getElementById('fileInput').value = '';
+      loadDocuments();
+    }
+  } catch (e) {
+    box.className = 'result-box error';
+    box.textContent = '✗ ' + e.message;
+    toast('Ошибка загрузки файла');
+  } finally {
+    zone.style.opacity = '';
+    zone.style.pointerEvents = '';
+  }
+}
+
+// ── Documents list ────────────────────────────────────────────────────────────
+async function loadDocuments() {
+  const list = document.getElementById('docList');
+  const count = document.getElementById('docCount');
+  try {
+    const r = await fetch(SERVER_URL + '/documents');
+    const docs = await r.json();
+    count.textContent = docs.length ? `(${docs.length})` : '';
+    if (!docs.length) {
+      list.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:6px 0">Документов пока нет — загрузите файл или вставьте текст</div>';
+      return;
+    }
+    list.innerHTML = docs.slice().reverse().map(d => {
+      const date = d.created_at ? new Date(d.created_at * 1000).toLocaleString('ru') : '';
+      const name = d.title || d.filename || d.doc_id;
+      return `<div class="doc-item">
+        <div class="doc-info">
+          <div class="doc-title" title="${escHtml(name)}">${escHtml(name)}</div>
+          <div class="doc-meta">${d.chunks} чанк${d.chunks===1?'':'ов'} · ${escHtml(d.source||'')} · ${date}</div>
+        </div>
+        <button class="del-btn" title="Удалить" onclick="deleteDoc('${d.doc_id}', this)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+        </button>
+      </div>`;
+    }).join('');
+  } catch {
+    list.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:6px 0">Не удалось загрузить список</div>';
+  }
+}
+
+async function deleteDoc(docId, btn) {
+  if (!confirm('Удалить документ из базы знаний?')) return;
+  btn.disabled = true;
+  try {
+    const r = await fetch(SERVER_URL + '/document/' + docId, { method: 'DELETE' });
+    const data = await r.json();
+    if (data.deleted) { toast('Документ удалён'); loadDocuments(); }
+    else toast('Документ не найден в индексе');
+  } catch (e) {
+    toast('Ошибка удаления: ' + e.message);
+    btn.disabled = false;
+  }
+}
+
+// ── Stats ─────────────────────────────────────────────────────────────────────
+async function loadStats() {
+  const wrap = document.getElementById('statsWrap');
+  try {
+    const r = await fetch(SERVER_URL + '/stats');
+    const data = await r.json();
+    wrap.innerHTML = Object.entries(data).map(([k, v]) => `
+      <div class="stat-card">
+        <div class="stat-label">${k.replace(/_/g,' ')}</div>
+        <div class="stat-value">${v}</div>
+      </div>
+    `).join('');
+  } catch {
+    wrap.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:20px 0">Не удалось загрузить — сервер недоступен</div>';
+  }
+}
+
+// ── Config ────────────────────────────────────────────────────────────────────
+async function loadConfig() {
+  try {
+    const r = await fetch(SERVER_URL + '/config');
+    const data = await r.json();
+    document.getElementById('configCards').innerHTML = `
+      <div class="card" style="margin-top:0">
+        <h3>Конфигурация RAG</h3>
+        ${Object.entries(data).map(([k,v]) => `
+          <div class="settings-row">
+            <span class="key">${k}</span>
+            <span class="val">${v}</span>
+          </div>
+        `).join('')}
+      </div>`;
+  } catch {}
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+let toastTimer;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
+</body>
+</html>
