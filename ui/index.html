@@ -803,7 +803,7 @@ async function sendMessage() {
 
   try {
     // 1. Поиск в RAG
-    const results = await callTool('search_knowledge_base', { query: text, top_k: 4 });
+    const results = await callTool('search_knowledge_base', { query: text, top_k: 6 });
 
     // 2. Формируем контекст
     const context = results.map((r, i) =>
