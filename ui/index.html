@@ -448,6 +448,38 @@
   }
   #toast.show { opacity: 1; transform: translateY(0); }
 
+  /* ── Mode toggle ── */
+  .mode-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--muted);
+    user-select: none;
+    cursor: pointer;
+  }
+  .toggle-track {
+    position: relative;
+    width: 36px;
+    height: 20px;
+    background: var(--border);
+    border-radius: 10px;
+    transition: background .2s;
+    flex-shrink: 0;
+  }
+  .toggle-track.on { background: var(--accent); }
+  .toggle-thumb {
+    position: absolute;
+    top: 3px; left: 3px;
+    width: 14px; height: 14px;
+    background: #fff;
+    border-radius: 50%;
+    transition: transform .2s;
+  }
+  .toggle-track.on .toggle-thumb { transform: translateX(16px); }
+  .mode-label { transition: color .2s; }
+  .mode-toggle.active .mode-label { color: var(--accent); }
+
   /* ── Scrollbar ── */
   * { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
 
@@ -586,6 +618,13 @@
     <div class="topbar">
       <h2>Чат с базой знаний</h2>
       <div class="actions">
+        <div class="mode-toggle" id="modeToggle" onclick="toggleMode()" title="Режим ответа">
+          <span class="mode-label" id="modeLabel">Только база</span>
+          <div class="toggle-track" id="toggleTrack">
+            <div class="toggle-thumb"></div>
+          </div>
+          <span style="color:var(--muted);font-size:11px" id="modeLabelRight">Общий</span>
+        </div>
         <button class="btn" onclick="clearChat()">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg>
           Очистить
@@ -715,6 +754,28 @@
 </nav>
 
 <script>
+// ── Mode toggle ───────────────────────────────────────────────────────────────
+let chatMode = 'rag'; // 'rag' | 'general'
+
+function toggleMode() {
+  chatMode = chatMode === 'rag' ? 'general' : 'rag';
+  const track = document.getElementById('toggleTrack');
+  const label = document.getElementById('modeLabel');
+  const labelRight = document.getElementById('modeLabelRight');
+  if (chatMode === 'general') {
+    track.classList.add('on');
+    label.style.color = 'var(--muted)';
+    labelRight.style.color = 'var(--accent)';
+  } else {
+    track.classList.remove('on');
+    label.style.color = '';
+    labelRight.style.color = 'var(--muted)';
+  }
+  document.getElementById('chatInput').placeholder = chatMode === 'general'
+    ? 'Спросите что угодно...'
+    : 'Спросите по загруженным документам...';
+}
+
 // ── Config ────────────────────────────────────────────────────────────────────
 const _defaultUrl = (window.location.protocol === 'file:' || !window.location.host) ? 'http://localhost:8000' : window.location.origin;
 let SERVER_URL = localStorage.getItem('serverUrl') || _defaultUrl;
@@ -818,6 +879,7 @@ async function sendMessage() {
         messages: messages.slice(-6),
         context,
         query: text,
+        mode: chatMode,
       }),
     });
 
