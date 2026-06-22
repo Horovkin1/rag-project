@@ -450,9 +450,99 @@
 
   /* ── Scrollbar ── */
   * { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+
+  /* ── Mobile bottom nav ── */
+  .mobile-nav {
+    display: none;
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    z-index: 50;
+    padding: 0 0 env(safe-area-inset-bottom);
+  }
+  .mobile-nav-items {
+    display: flex;
+  }
+  .mobile-nav-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 10px 4px;
+    cursor: pointer;
+    color: var(--muted);
+    font-size: 10px;
+    transition: color .15s;
+    border: none;
+    background: none;
+    font-family: var(--font);
+  }
+  .mobile-nav-item svg { width: 22px; height: 22px; }
+  .mobile-nav-item.active { color: var(--accent); }
+
+  /* ── Mobile status bar ── */
+  .mobile-header {
+    display: none;
+    padding: 12px 16px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    align-items: center;
+    justify-content: space-between;
+  }
+  .mobile-header .logo-text { font-size: 14px; font-weight: 600; }
+  .mobile-header .status-dot { font-size: 12px; }
+
+  @media (max-width: 640px) {
+    body { flex-direction: column; overflow: hidden; }
+
+    .sidebar { display: none; }
+
+    .mobile-nav { display: block; }
+    .mobile-header { display: flex; }
+
+    .main { padding-bottom: calc(60px + env(safe-area-inset-bottom)); }
+
+    .topbar { padding: 11px 16px; }
+    .topbar h2 { font-size: 13px; }
+
+    .messages { padding: 16px 12px; gap: 12px; }
+
+    .msg { max-width: 92%; }
+
+    .chat-input-wrap { padding: 10px 12px; }
+    .chat-input-row { padding: 9px 12px; }
+    #chatInput { font-size: 16px; } /* prevent zoom on iOS */
+
+    .ingest-wrap { padding: 16px 12px; }
+
+    .stats-wrap {
+      padding: 16px 12px;
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    .settings-wrap { padding: 16px 12px; max-width: 100%; }
+
+    .card { padding: 16px; }
+
+    .drop-zone { padding: 24px 16px; }
+
+    #toast { bottom: calc(72px + env(safe-area-inset-bottom)); right: 12px; left: 12px; text-align: center; }
+  }
 </style>
 </head>
 <body>
+
+<!-- Mobile header -->
+<div class="mobile-header">
+  <span class="logo-text">RAG Assistant</span>
+  <div class="status-dot">
+    <span class="dot" id="statusDotMobile"></span>
+    <span id="statusTextMobile">Подключение...</span>
+  </div>
+</div>
 
 <!-- Sidebar -->
 <aside class="sidebar">
@@ -602,6 +692,28 @@
 
 <div id="toast"></div>
 
+<!-- Mobile bottom nav -->
+<nav class="mobile-nav">
+  <div class="mobile-nav-items">
+    <button class="mobile-nav-item active" data-panel="chat" onclick="switchPanel('chat', this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      Чат
+    </button>
+    <button class="mobile-nav-item" data-panel="ingest" onclick="switchPanel('ingest', this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+      Документы
+    </button>
+    <button class="mobile-nav-item" data-panel="stats" onclick="switchPanel('stats', this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+      Статистика
+    </button>
+    <button class="mobile-nav-item" data-panel="settings" onclick="switchPanel('settings', this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93A10 10 0 0 0 4.93 19.07M19.07 4.93A10 10 0 0 1 4.93 19.07"/></svg>
+      Настройки
+    </button>
+  </div>
+</nav>
+
 <script>
 // ── Config ────────────────────────────────────────────────────────────────────
 const _defaultUrl = (window.location.protocol === 'file:' || !window.location.host) ? 'http://localhost:8000' : window.location.origin;
@@ -617,9 +729,9 @@ function saveSettings() {
 // ── Panel switching ────────────────────────────────────────────────────────────
 function switchPanel(name, el) {
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.querySelectorAll('.nav-item, .mobile-nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('panel-' + name).classList.add('active');
-  el.classList.add('active');
+  document.querySelectorAll('[data-panel="' + name + '"]').forEach(n => n.classList.add('active'));
   if (name === 'stats') loadStats();
   if (name === 'settings') loadConfig();
   if (name === 'ingest') loadDocuments();
@@ -627,18 +739,18 @@ function switchPanel(name, el) {
 
 // ── Status check ──────────────────────────────────────────────────────────────
 async function checkStatus() {
-  const dot = document.getElementById('statusDot');
-  const txt = document.getElementById('statusText');
+  const dots = [document.getElementById('statusDot'), document.getElementById('statusDotMobile')];
+  const txts = [document.getElementById('statusText'), document.getElementById('statusTextMobile')];
   try {
     const r = await fetch(SERVER_URL + '/health', { signal: AbortSignal.timeout(3000) });
     if (r.ok) {
-      dot.classList.add('online');
-      txt.textContent = 'Сервер онлайн';
+      dots.forEach(d => d && d.classList.add('online'));
+      txts.forEach(t => t && (t.textContent = 'Онлайн'));
       return true;
     }
   } catch {}
-  dot.classList.remove('online');
-  txt.textContent = 'Нет соединения';
+  dots.forEach(d => d && d.classList.remove('online'));
+  txts.forEach(t => t && (t.textContent = 'Нет соединения'));
   return false;
 }
 
